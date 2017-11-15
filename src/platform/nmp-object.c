@@ -190,7 +190,8 @@ _idx_obj_part (const DedupMultiIdxType *idx_type,
 		if (   !NM_IN_SET (NMP_OBJECT_GET_TYPE (obj_a), NMP_OBJECT_TYPE_IP4_ADDRESS,
 		                                                NMP_OBJECT_TYPE_IP6_ADDRESS,
 		                                                NMP_OBJECT_TYPE_IP4_ROUTE,
-		                                                NMP_OBJECT_TYPE_IP6_ROUTE)
+		                                                NMP_OBJECT_TYPE_IP6_ROUTE,
+		                                                NMP_OBJECT_TYPE_QDISC)
 		    || !nmp_object_is_visible (obj_a)) {
 			if (h)
 				nm_hash_update_val (h, obj_a);
@@ -737,6 +738,7 @@ _vt_cmd_plobj_to_string_id (ip4_address, NMPlatformIP4Address, "%d: %s/%d%s%s", 
                                                                obj->peer_address != obj->address ? "," : "",
                                                                obj->peer_address != obj->address ? nm_utils_inet4_ntop (nm_utils_ip4_address_clear_host_address (obj->peer_address, obj->plen), buf2) : "");
 _vt_cmd_plobj_to_string_id (ip6_address, NMPlatformIP6Address, "%d: %s",        obj->ifindex, nm_utils_inet6_ntop (&obj->address, buf1));
+_vt_cmd_plobj_to_string_id (qdisc,       NMPlatformQdisc,      "%d: %d",        obj->ifindex, obj->parent);
 
 void
 nmp_object_hash_update (const NMPObject *obj, NMHashState *h)
@@ -1035,6 +1037,10 @@ _vt_cmd_plobj_id_cmp (ip6_address, NMPlatformIP6Address,
                       /* for IPv6 addresses, the prefix length is not part of the primary identifier. */
                       NM_CMP_FIELD_IN6ADDR (obj1, obj2, address);
 )
+_vt_cmd_plobj_id_cmp (qdisc, NMPlatformQdisc,
+                      NM_CMP_FIELD (obj1, obj2, ifindex);
+                      NM_CMP_FIELD (obj1, obj2, parent);
+)
 
 static int
 _vt_cmd_plobj_id_cmp_ip4_route (const NMPlatformObject *obj1, const NMPlatformObject *obj2)
@@ -1112,6 +1118,11 @@ _vt_cmd_plobj_id_hash_update (ip4_route, NMPlatformIP4Route, {
 })
 _vt_cmd_plobj_id_hash_update (ip6_route, NMPlatformIP6Route, {
 	nm_platform_ip6_route_hash_update (obj, NM_PLATFORM_IP_ROUTE_CMP_TYPE_ID, h);
+})
+_vt_cmd_plobj_id_hash_update (qdisc, NMPlatformQdisc, {
+	nm_hash_update_vals (h,
+	                     obj->ifindex,
+	                     obj->parent);
 })
 
 static inline void
@@ -1220,6 +1231,12 @@ static const guint8 _supported_cache_ids_ipx_route[] = {
 	NMP_CACHE_ID_TYPE_ADDRROUTE_BY_IFINDEX,
 	NMP_CACHE_ID_TYPE_DEFAULT_ROUTES,
 	NMP_CACHE_ID_TYPE_ROUTES_BY_WEAK_ID,
+	0,
+};
+
+static const guint8 _supported_cache_ids_qdisc[] = {
+	NMP_CACHE_ID_TYPE_OBJECT_TYPE,
+	NMP_CACHE_ID_TYPE_ADDRROUTE_BY_IFINDEX,
 	0,
 };
 
@@ -1502,6 +1519,7 @@ nmp_lookup_init_obj_type (NMPLookup *lookup,
 	case NMP_OBJECT_TYPE_IP6_ADDRESS:
 	case NMP_OBJECT_TYPE_IP4_ROUTE:
 	case NMP_OBJECT_TYPE_IP6_ROUTE:
+	case NMP_OBJECT_TYPE_QDISC:
 		o = _nmp_object_stackinit_from_type (&lookup->selector_obj, obj_type);
 		lookup->cache_id_type = NMP_CACHE_ID_TYPE_OBJECT_TYPE;
 		return _L (lookup);
@@ -1539,7 +1557,8 @@ nmp_lookup_init_addrroute (NMPLookup *lookup,
 	nm_assert (NM_IN_SET (obj_type, NMP_OBJECT_TYPE_IP4_ADDRESS,
 	                                NMP_OBJECT_TYPE_IP6_ADDRESS,
 	                                NMP_OBJECT_TYPE_IP4_ROUTE,
-	                                NMP_OBJECT_TYPE_IP6_ROUTE));
+	                                NMP_OBJECT_TYPE_IP6_ROUTE,
+	                                NMP_OBJECT_TYPE_QDISC));
 
 	if (ifindex <= 0) {
 		return nmp_lookup_init_obj_type (lookup,
@@ -2566,6 +2585,23 @@ const NMPClass _nmp_classes[NMP_OBJECT_TYPE_MAX] = {
 		.cmd_plobj_to_string                = (const char *(*) (const NMPlatformObject *obj, char *buf, gsize len)) nm_platform_ip6_route_to_string,
 		.cmd_plobj_hash_update              = _vt_cmd_plobj_hash_update_ip6_route,
 		.cmd_plobj_cmp                      = (int (*) (const NMPlatformObject *obj1, const NMPlatformObject *obj2)) nm_platform_ip6_route_cmp_full,
+	},
+	[NMP_OBJECT_TYPE_QDISC - 1] = {
+		.parent                             = DEDUP_MULTI_OBJ_CLASS_INIT(),
+		.obj_type                           = NMP_OBJECT_TYPE_QDISC,
+		.sizeof_data                        = sizeof (NMPObjectQdisc),
+		.sizeof_public                      = sizeof (NMPlatformQdisc),
+		.obj_type_name                      = "qdisc",
+		.rtm_gettype                        = RTM_GETQDISC,
+		.signal_type_id                     = NM_PLATFORM_SIGNAL_ID_QDISC,
+		.signal_type                        = NM_PLATFORM_SIGNAL_QDISC_CHANGED,
+		.supported_cache_ids                = _supported_cache_ids_qdisc,
+		.cmd_plobj_id_cmp                   = _vt_cmd_plobj_id_cmp_qdisc,
+		.cmd_plobj_id_hash_update           = _vt_cmd_plobj_id_hash_update_qdisc,
+		.cmd_plobj_to_string_id             = _vt_cmd_plobj_to_string_id_qdisc,
+		.cmd_plobj_to_string                = (const char *(*) (const NMPlatformObject *obj, char *buf, gsize len)) nm_platform_qdisc_to_string,
+		.cmd_plobj_hash_update              = (void (*) (const NMPlatformObject *obj, NMHashState *h)) nm_platform_qdisc_hash_update,
+		.cmd_plobj_cmp                      = (int (*) (const NMPlatformObject *obj1, const NMPlatformObject *obj2)) nm_platform_qdisc_cmp,
 	},
 	[NMP_OBJECT_TYPE_LNK_GRE - 1] = {
 		.parent                             = DEDUP_MULTI_OBJ_CLASS_INIT(),
