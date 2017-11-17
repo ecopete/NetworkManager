@@ -259,7 +259,7 @@ _dump_team_link_watcher (NMTeamLinkWatcher *watcher)
 		int _val = nm_team_link_watcher_get_##key (watcher); \
 		\
 		if (_val) \
-			g_string_append_printf (str, " %s=%d", name, _val); \
+			g_string_append_printf (str, ",%s=%d", name, _val); \
 	} G_STMT_END;
 
 	if (nm_streq (name, NM_TEAM_LINK_WATCHER_ETHTOOL)) {
@@ -309,7 +309,7 @@ _parse_team_link_watcher (const char *str,
 	nm_assert (!error || !*error);
 
 	str_clean = g_strstrip (g_strdup (str));
-	watcherv = nmc_strsplit_set (str_clean, " \t", 0);
+	watcherv = nmc_strsplit_set (str_clean, ",", 0);
 	if (!watcherv || !watcherv[0]) {
 		g_set_error (error, 1, 0, "'%s' is not valid.", str);
 		return NULL;
@@ -3854,7 +3854,7 @@ _get_fcn_team_link_watchers (ARGS_GET_FCN)
 		watcher_str = _dump_team_link_watcher (watcher);
 		if (watcher_str) {
 			if (printable->len > 0)
-				g_string_append (printable, ", ");
+				g_string_append (printable, "; ");
 			g_string_append (printable, watcher_str);
 			g_free (watcher_str);
 		}
@@ -3870,7 +3870,7 @@ _set_fcn_team_link_watchers (ARGS_SET_FCN)
 	const char *const*iter;
 	NMTeamLinkWatcher *watcher;
 
-	strv = nmc_strsplit_set (value, ",", 0);
+	strv = nmc_strsplit_set (value, ";", 0);
 	for (iter = (const char *const*) strv; *iter; iter++) {
 		watcher = _parse_team_link_watcher (*iter, error);
 		if (!watcher)
@@ -3926,7 +3926,7 @@ _get_fcn_team_port_link_watchers (ARGS_GET_FCN)
 		watcher_str = _dump_team_link_watcher (watcher);
 		if (watcher_str) {
 			if (printable->len > 0)
-				g_string_append (printable, ", ");
+				g_string_append (printable, "; ");
 			g_string_append (printable, watcher_str);
 			g_free (watcher_str);
 		}
@@ -3942,7 +3942,7 @@ _set_fcn_team_port_link_watchers (ARGS_SET_FCN)
 	const char *const*iter;
 	NMTeamLinkWatcher *watcher;
 
-	strv = nmc_strsplit_set (value, ",", 0);
+	strv = nmc_strsplit_set (value, ";", 0);
 	for (iter = (const char *const*) strv; *iter; iter++) {
 		watcher = _parse_team_link_watcher (*iter, error);
 		if (!watcher)
@@ -4780,7 +4780,7 @@ static const NMMetaPropertyType _pt_gobject_devices = {
 #define TEAM_LINK_WATCHERS_DESCRIBE_MESSAGE \
 	N_("Enter a list of link watchers formatted as dictionaries where the keys " \
 	   "are teamd properties. Dictionary pairs are in the form: key=value and pairs " \
-	   "are separated by ' '. Dictionaries are separated with ','.\n" \
+	   "are separated by ','. Dictionaries are separated with ';'.\n" \
 	   "The keys allowed/required in the dictionary change on the basis of the link " \
 	   "watcher type, while the only property common to all the link watchers is " \
 	   " 'name'*, which defines the link watcher to be specified.\n\n" \
