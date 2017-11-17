@@ -377,6 +377,9 @@ typedef struct _NMDevicePrivate {
 	NMIP4Config *   ext_ip4_config; /* Stuff added outside NM */
 	NMIP4Config *   wwan_ip4_config; /* WWAN configuration */
 	GSList *        vpn4_configs;   /* VPNs which use this device */
+	NMIP4Config *   dev_ip4_config_orig; /* Original dev_ip4_config before
+	                                      * external updates (only stored if
+	                                      * different from @dev_ip4_config) */
 
 	bool v4_has_shadowed_routes;
 	const char *ip4_rp_filter;
@@ -5621,6 +5624,7 @@ nm_device_handle_ipv4ll_event (sd_ipv4ll *ll, int event, void *data)
 			nm_device_activate_schedule_ip4_config_result (self, config);
 		} else if (priv->ip4_state == IP_DONE) {
 			g_clear_object (&priv->dev_ip4_config);
+			g_clear_object (&priv->dev_ip4_config_orig);
 			priv->dev_ip4_config = g_object_ref (config);
 			if (!ip4_config_merge_and_apply (self, TRUE)) {
 				_LOGE (LOGD_AUTOIP4, "failed to update IP4 config for autoip change.");
@@ -5904,6 +5908,7 @@ dhcp4_lease_change (NMDevice *self, NMIP4Config *config)
 	g_return_val_if_fail (config, FALSE);
 
 	g_clear_object (&priv->dev_ip4_config);
+	g_clear_object (&priv->dev_ip4_config_orig);
 	priv->dev_ip4_config = g_object_ref (config);
 
 	if (!ip4_config_merge_and_apply (self, TRUE)) {
@@ -8611,6 +8616,7 @@ nm_device_activate_schedule_ip4_config_result (NMDevice *self, NMIP4Config *conf
 	priv = NM_DEVICE_GET_PRIVATE (self);
 
 	g_clear_object (&priv->dev_ip4_config);
+	g_clear_object (&priv->dev_ip4_config_orig);
 	if (config)
 		priv->dev_ip4_config = g_object_ref (config);
 
@@ -9090,6 +9096,11 @@ nm_device_reactivate_ip4_config (NMDevice *self,
 	if (priv->ip4_state != IP_NONE) {
 		g_clear_object (&priv->con_ip4_config);
 		g_clear_object (&priv->ext_ip4_config);
+		if (priv->dev_ip4_config_orig) {
+			g_clear_object (&priv->dev_ip4_config);
+			priv->dev_ip4_config = priv->dev_ip4_config_orig;
+			priv->dev_ip4_config_orig = NULL;
+		}
 		priv->con_ip4_config = _ip4_config_new (self);
 		nm_ip4_config_merge_setting (priv->con_ip4_config,
 		                             s_ip4_new,
@@ -10943,6 +10954,7 @@ static gboolean
 update_ext_ip_config (NMDevice *self, int addr_family, gboolean initial, gboolean intersect_configs)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	NMIP4Config *tmp;
 	int ifindex;
 	gboolean capture_resolv_conf;
 	GSList *iter;
@@ -10979,8 +10991,19 @@ update_ext_ip_config (NMDevice *self, int addr_family, gboolean initial, gboolea
 					                         default_route_metric_penalty_get (self, AF_INET));
 				}
 				if (priv->dev_ip4_config) {
-					nm_ip4_config_intersect (priv->dev_ip4_config, priv->ext_ip4_config,
-					                         default_route_metric_penalty_get (self, AF_INET));
+					tmp = nm_ip4_config_intersect_alloc (priv->dev_ip4_config,
+					                                     priv->ext_ip4_config,
+					                                     default_route_metric_penalty_get (self, AF_INET));
+					if (tmp) {
+						/* the intersection is different from dev config */
+						if (!priv->dev_ip4_config_orig)
+							priv->dev_ip4_config_orig = priv->dev_ip4_config;
+						else
+							g_object_unref (priv->dev_ip4_config);
+						priv->dev_ip4_config = tmp;
+					} else {
+						/* intersection = dev config = ext config */
+					}
 				}
 				if (priv->wwan_ip4_config) {
 					nm_ip4_config_intersect (priv->wwan_ip4_config, priv->ext_ip4_config,
@@ -12399,6 +12422,7 @@ _cleanup_generic_post (NMDevice *self, CleanupType cleanup_type)
 	g_clear_object (&priv->proxy_config);
 	g_clear_object (&priv->con_ip4_config);
 	g_clear_object (&priv->dev_ip4_config);
+	g_clear_object (&priv->dev_ip4_config_orig);
 	g_clear_object (&priv->ext_ip4_config);
 	g_clear_object (&priv->wwan_ip4_config);
 	g_clear_object (&priv->ip4_config);
