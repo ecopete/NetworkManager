@@ -187,6 +187,9 @@ void nm_ip4_config_subtract (NMIP4Config *dst,
 void nm_ip4_config_intersect (NMIP4Config *dst,
                               const NMIP4Config *src,
                               guint32 default_route_metric_penalty);
+NMIP4Config *nm_ip4_config_intersect_alloc (const NMIP4Config *a,
+                                            const NMIP4Config *b,
+                                            guint32 default_route_metric_penalty);
 gboolean nm_ip4_config_replace (NMIP4Config *dst, const NMIP4Config *src, gboolean *relevant_changes);
 void nm_ip4_config_dump (const NMIP4Config *self, const char *detail);
 
