@@ -1570,7 +1570,9 @@ activate_slave_connections (NMPolicy *self, NMDevice *device)
 		internal_activation = subject && nm_auth_subject_is_internal (subject);
 	}
 
-	connections = nm_settings_get_connections_sorted (priv->settings, NULL);
+	connections = nm_settings_get_connections_clone (priv->settings, NULL,
+	                                                 NULL, NULL,
+	                                                 nm_settings_connection_cmp_autoconnect_priority_p_with_data, NULL);
 	for (i = 0; connections[i]; i++) {
 		NMConnection *slave;
 		NMSettingConnection *s_slave_con;
