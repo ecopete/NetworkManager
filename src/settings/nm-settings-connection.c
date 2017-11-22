@@ -42,9 +42,9 @@
 #define SETTINGS_TIMESTAMPS_FILE  NMSTATEDIR "/timestamps"
 #define SETTINGS_SEEN_BSSIDS_FILE NMSTATEDIR "/seen-bssids"
 
-#define AUTOCONNECT_RETRIES_UNSET       -2
-#define AUTOCONNECT_RETRIES_FOREVER     -1
-#define AUTOCONNECT_RETRIES_DEFAULT      4
+#define AUTOCONNECT_RETRIES_UNSET        -2
+#define AUTOCONNECT_RETRIES_FOREVER      -1
+#define AUTOCONNECT_RETRIES_DEFAULT       4
 #define AUTOCONNECT_RESET_RETRIES_TIMER 300
 
 /*****************************************************************************/
@@ -109,7 +109,7 @@ typedef struct _NMSettingsConnectionPrivate {
 	GHashTable *seen_bssids; /* Up-to-date BSSIDs that's been seen for the connection */
 
 	int autoconnect_retries;
-	gint32 autoconnect_blocked_until;
+	gint32 autoconnect_retries_blocked_until;
 
 	char *filename;
 } NMSettingsConnectionPrivate;
@@ -2590,13 +2590,13 @@ nm_settings_connection_autoconnect_retries_set (NMSettingsConnection *self,
 		priv->autoconnect_retries = retries;
 	}
 	if (retries)
-		priv->autoconnect_blocked_until = 0;
+		priv->autoconnect_retries_blocked_until = 0;
 	else {
 		/* XXX: the blocked time must be identical for all connections, otherwise
 		 * the tracking of resetting the retry count in NMPolicy needs adjustment
 		 * (as it would need to re-evaluate the next-timeout everytime a
 		 * connection gets blocked). */
-		priv->autoconnect_blocked_until = nm_utils_get_monotonic_timestamp_s () + AUTOCONNECT_RESET_RETRIES_TIMER;
+		priv->autoconnect_retries_blocked_until = nm_utils_get_monotonic_timestamp_s () + AUTOCONNECT_RESET_RETRIES_TIMER;
 	}
 }
 
@@ -2607,9 +2607,9 @@ nm_settings_connection_autoconnect_retries_reset (NMSettingsConnection *self)
 }
 
 gint32
-nm_settings_connection_autoconnect_blocked_until_get (NMSettingsConnection *self)
+nm_settings_connection_autoconnect_retries_blocked_until (NMSettingsConnection *self)
 {
-	return NM_SETTINGS_CONNECTION_GET_PRIVATE (self)->autoconnect_blocked_until;
+	return NM_SETTINGS_CONNECTION_GET_PRIVATE (self)->autoconnect_retries_blocked_until;
 }
 
 NMSettingsAutoconnectBlockedReason
